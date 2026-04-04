@@ -33,8 +33,16 @@ export function openDirections(payload: DirectionsPayload): void {
     return;
   }
 
-  // Browser fallback
+  // Browser fallback — use a temporary anchor to avoid popup blockers
   const url = `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`;
   console.log('[MAP] Opening browser maps', url);
-  window.open(url, '_blank');
+
+  const a = document.createElement('a');
+  a.href = url;
+  a.target = '_blank';
+  a.rel = 'noopener noreferrer';
+  a.style.display = 'none';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
 }
