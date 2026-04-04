@@ -5,6 +5,7 @@ import { atHomeArtists, atHomeReviews } from '@/data/atHomeData';
 import type { AtHomeService } from '@/types/atHome';
 import ServiceDrawer from '@/components/ServiceDrawer';
 import PageFloatingFooter from '@/components/PageFloatingFooter';
+import { shareContent } from '@/lib/share';
 
 const ArtistProfile = () => {
   const { id } = useParams();
