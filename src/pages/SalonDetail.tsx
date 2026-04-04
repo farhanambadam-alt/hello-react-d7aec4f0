@@ -20,6 +20,7 @@ import PageFloatingFooter from '@/components/PageFloatingFooter';
 import { useLocation_ } from '@/contexts/LocationContext';
 import { haversineDistance, formatDistance } from '@/lib/distance';
 import { openDirections } from '@/lib/openDirections';
+import { shareContent } from '@/lib/share';
 
 /* ── service image map ── */
 const serviceImages: Record<string, string> = {
