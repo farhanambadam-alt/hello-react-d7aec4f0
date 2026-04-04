@@ -336,6 +336,9 @@ const SalonDetail = () => {
             <button onClick={() => openDirections({ lat: salon.lat, lng: salon.lng, address: salon.address })} className="w-11 h-11 rounded-full btn-themed flex items-center justify-center hover:opacity-90 transition-opacity" aria-label="Directions">
               <Navigation size={18} />
             </button>
+            <button onClick={() => shareContent({ title: salon.name, text: `Check out ${salon.name} on ChicSalon`, url: window.location.href })} className="w-11 h-11 rounded-full bg-card border border-border text-foreground flex items-center justify-center hover:bg-secondary transition-colors" aria-label="Share">
+              <Share2 size={18} />
+            </button>
             <button
               onClick={() => setActiveTab('packages' as any)}
               className={promoPillClassName}
