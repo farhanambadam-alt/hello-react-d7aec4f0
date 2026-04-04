@@ -333,7 +333,7 @@ const SalonDetail = () => {
             </div>
           </div>
           <div className="flex gap-2 flex-shrink-0 items-center">
-            <button className="w-11 h-11 rounded-full btn-themed flex items-center justify-center hover:opacity-90 transition-opacity" aria-label="Directions">
+            <button onClick={() => openDirections({ lat: salon.lat, lng: salon.lng, address: salon.address })} className="w-11 h-11 rounded-full btn-themed flex items-center justify-center hover:opacity-90 transition-opacity" aria-label="Directions">
               <Navigation size={18} />
             </button>
             <button
