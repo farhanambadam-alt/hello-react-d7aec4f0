@@ -611,59 +611,64 @@ const SalonDetail = () => {
             <div className="border-t border-border/50 mb-5" />
 
             {/* ── Journey Visualization ── */}
-            <div className="flex gap-3">
-              {/* Vertical route line */}
-              <div className="flex flex-col items-center w-10 flex-shrink-0">
-                {/* Origin dot */}
-                <div className="w-3 h-3 rounded-full border-2 border-primary bg-card flex-shrink-0 z-10" />
-                {/* Dashed line */}
-                <div className="w-[2px] flex-1 border-l-2 border-dashed border-primary/30 my-0.5" />
-                {/* Destination dot */}
-                <div className="w-3 h-3 rounded-full bg-primary flex-shrink-0 z-10" />
+            <div className="bg-background rounded-2xl border border-border p-4">
+              <div className="flex gap-3">
+                {/* Vertical route line */}
+                <div className="flex flex-col items-center w-5 flex-shrink-0 pt-1">
+                  {/* Origin dot */}
+                  <div className="w-3.5 h-3.5 rounded-full border-[2.5px] border-primary bg-card flex-shrink-0 z-10 shadow-sm" />
+                  {/* Dashed line */}
+                  <div className="w-[2px] flex-1 border-l-2 border-dashed border-primary/30 my-1" />
+                  {/* Destination dot */}
+                  <div className="w-3.5 h-3.5 rounded-full bg-primary flex-shrink-0 z-10 shadow-sm" />
+                </div>
+
+                {/* Journey details */}
+                <div className="flex-1 min-w-0 flex flex-col">
+                  {/* Origin */}
+                  <div className="pb-1">
+                    <p className="text-[10px] font-heading font-semibold uppercase tracking-wider text-muted-foreground/70">
+                      Your Location
+                    </p>
+                    <p className="text-[14px] font-heading font-semibold text-foreground mt-0.5 leading-snug">
+                      {userLocation.areaName || userLocation.cityName || 'Current Location'}
+                    </p>
+                    {userLocation.fullAddress && (
+                      <p className="text-[12px] font-body text-muted-foreground mt-0.5 leading-relaxed line-clamp-2">
+                        {userLocation.fullAddress}
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Distance + directions badge */}
+                  <div className="py-3 flex items-center gap-2">
+                    <span className="inline-flex items-center gap-1.5 text-[12px] font-heading font-semibold text-primary bg-primary/8 px-3.5 py-1.5 rounded-full border border-primary/15 shadow-sm">
+                      <Navigation size={12} className="rotate-90" />
+                      {dynamicDistance}
+                    </span>
+                    <button
+                      onClick={() => openDirections({ lat: salon.lat, lng: salon.lng, address: salon.address })}
+                      className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0 active:scale-95 transition-transform border border-primary/15"
+                      aria-label="Get directions"
+                    >
+                      <Navigation size={14} className="text-primary" />
+                    </button>
+                  </div>
+
+                  {/* Destination */}
+                  <div className="pt-1">
+                    <p className="text-[10px] font-heading font-semibold uppercase tracking-wider text-muted-foreground/70">
+                      Destination
+                    </p>
+                    <p className="text-[14px] font-heading font-semibold text-foreground mt-0.5 leading-snug">
+                      {salon.name}
+                    </p>
+                    <p className="text-[12px] font-body text-muted-foreground mt-0.5 leading-relaxed">
+                      {salon.address}
+                    </p>
+                  </div>
+                </div>
               </div>
-
-              {/* Journey details */}
-              <div className="flex-1 min-w-0 flex flex-col">
-                {/* Origin */}
-                <div className="pb-2">
-                  <p className="text-[10px] font-heading font-semibold uppercase tracking-wider text-muted-foreground">
-                    From
-                  </p>
-                  <p className="text-[13px] font-heading font-medium text-foreground mt-0.5 truncate">
-                    {userLocation.areaName || userLocation.cityName || 'Your Location'}
-                  </p>
-                </div>
-
-                {/* Distance badge in the middle */}
-                <div className="py-2.5">
-                  <span className="inline-flex items-center gap-1.5 text-[12px] font-heading font-semibold text-primary bg-primary/8 px-3 py-1 rounded-full border border-primary/12">
-                    <Navigation size={11} className="rotate-90" />
-                    {dynamicDistance}
-                  </span>
-                </div>
-
-                {/* Destination */}
-                <div className="pt-1">
-                  <p className="text-[10px] font-heading font-semibold uppercase tracking-wider text-muted-foreground">
-                    To
-                  </p>
-                  <p className="text-[14px] font-heading font-semibold text-foreground mt-0.5 leading-snug">
-                    {salon.name}
-                  </p>
-                  <p className="text-[12px] font-body text-muted-foreground mt-0.5 leading-relaxed">
-                    {salon.address}
-                  </p>
-                </div>
-              </div>
-
-              {/* Directions arrow */}
-              <button
-                onClick={() => openDirections({ lat: salon.lat, lng: salon.lng, address: salon.address })}
-                className="self-center w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0 active:scale-95 transition-transform"
-                aria-label="Get directions"
-              >
-                <Navigation size={16} className="text-primary" />
-              </button>
             </div>
           </div>
 
