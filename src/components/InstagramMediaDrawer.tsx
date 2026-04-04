@@ -82,7 +82,7 @@ const InstagramMediaDrawer = ({
 
   if (!open || !current) return null;
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-[100]" style={{ isolation: 'isolate' }}>
       {/* Backdrop */}
       <div
