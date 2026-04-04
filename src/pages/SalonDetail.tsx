@@ -242,7 +242,7 @@ const SalonDetail = () => {
             <ArrowLeft size={18} className="text-foreground" />
           </button>
           <div className="flex gap-2">
-            <button className="w-10 h-10 rounded-full bg-card border border-border text-foreground flex items-center justify-center hover:bg-secondary transition-colors" aria-label="Share">
+            <button onClick={() => shareContent({ title: salon.name, text: `Check out ${salon.name} on ChicSalon`, url: window.location.href })} className="w-10 h-10 rounded-full bg-card border border-border text-foreground flex items-center justify-center hover:bg-secondary transition-colors" aria-label="Share">
               <Share2 size={16} />
             </button>
             <button onClick={() => id && toggleFavorite(id)} className="w-10 h-10 rounded-full bg-card border border-border flex items-center justify-center hover:bg-secondary transition-colors">
