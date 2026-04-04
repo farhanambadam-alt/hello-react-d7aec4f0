@@ -99,7 +99,8 @@ const YouTubeShortDrawer = ({ open, onClose, videoId }: YouTubeShortDrawerProps)
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
 
