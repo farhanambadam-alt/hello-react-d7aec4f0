@@ -387,7 +387,7 @@ const SalonDetail = () => {
           >
             <Navigation size={18} />
           </button>
-          <button className="w-11 h-11 min-w-[44px] min-h-[44px] rounded-full bg-card border border-border text-foreground flex items-center justify-center active:scale-90 transition-transform flex-shrink-0" aria-label="Share">
+          <button onClick={() => shareContent({ title: salon.name, text: `Check out ${salon.name} on ChicSalon`, url: window.location.href })} className="w-11 h-11 min-w-[44px] min-h-[44px] rounded-full bg-card border border-border text-foreground flex items-center justify-center active:scale-90 transition-transform flex-shrink-0" aria-label="Share">
             <Share2 size={18} />
           </button>
           <div className="flex gap-2 ml-auto">
