@@ -575,29 +575,29 @@ const SalonDetail = () => {
                 showHours ? 'max-h-[400px] opacity-100 mb-5' : 'max-h-0 opacity-0 mb-0'
               }`}
             >
-              <div className="ml-[52px] rounded-2xl border border-border overflow-hidden bg-background">
+              <div className="ml-[52px] rounded-2xl border border-border overflow-hidden bg-background shadow-sm">
                 {workingHours.map((wh, idx) => {
                   const isToday = wh.day === today;
                   const isClosed = wh.time === 'Closed';
                   return (
                     <div
                       key={wh.day}
-                      className={`flex items-center justify-between py-3 px-4 ${
-                        isToday ? 'bg-primary/6' : ''
+                      className={`flex items-center justify-between py-3.5 px-4 ${
+                        isToday ? 'bg-primary/8 border-l-[3px] border-l-primary' : 'border-l-[3px] border-l-transparent'
                       } ${idx !== workingHours.length - 1 ? 'border-b border-border/40' : ''}`}
                     >
                       <span className={`text-[13px] font-heading flex items-center gap-2 ${
-                        isToday ? 'font-bold text-primary' : 'font-medium text-foreground'
+                        isToday ? 'font-bold text-foreground' : 'font-medium text-foreground'
                       }`}>
                         {wh.day}
                         {isToday && (
-                          <span className="text-[9px] uppercase tracking-wider bg-primary text-primary-foreground px-1.5 py-0.5 rounded-full font-bold">
+                          <span className="text-[9px] uppercase tracking-wider bg-primary text-primary-foreground px-2 py-0.5 rounded-full font-bold shadow-sm">
                             Today
                           </span>
                         )}
                       </span>
-                      <span className={`text-[12px] font-body font-medium ${
-                        isClosed ? 'text-destructive' : isToday ? 'text-primary' : 'text-muted-foreground'
+                      <span className={`text-[12px] font-body font-semibold ${
+                        isClosed ? 'text-destructive' : isToday ? 'text-primary font-bold' : 'text-muted-foreground'
                       }`}>
                         {wh.time}
                       </span>
