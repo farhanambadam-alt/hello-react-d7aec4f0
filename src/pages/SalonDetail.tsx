@@ -20,6 +20,7 @@ import PageFloatingFooter from '@/components/PageFloatingFooter';
 import { useLocation_ } from '@/contexts/LocationContext';
 import { haversineDistance, formatDistance } from '@/lib/distance';
 import { openDirections } from '@/lib/openDirections';
+import { shareContent } from '@/lib/share';
 
 /* ── service image map ── */
 const serviceImages: Record<string, string> = {
@@ -241,7 +242,7 @@ const SalonDetail = () => {
             <ArrowLeft size={18} className="text-foreground" />
           </button>
           <div className="flex gap-2">
-            <button className="w-10 h-10 rounded-full bg-card border border-border text-foreground flex items-center justify-center hover:bg-secondary transition-colors" aria-label="Share">
+            <button onClick={() => shareContent({ title: salon.name, text: `Check out ${salon.name} on ChicSalon`, url: window.location.href })} className="w-10 h-10 rounded-full bg-card border border-border text-foreground flex items-center justify-center hover:bg-secondary transition-colors" aria-label="Share">
               <Share2 size={16} />
             </button>
             <button onClick={() => id && toggleFavorite(id)} className="w-10 h-10 rounded-full bg-card border border-border flex items-center justify-center hover:bg-secondary transition-colors">
@@ -386,7 +387,7 @@ const SalonDetail = () => {
           >
             <Navigation size={18} />
           </button>
-          <button className="w-11 h-11 min-w-[44px] min-h-[44px] rounded-full bg-card border border-border text-foreground flex items-center justify-center active:scale-90 transition-transform flex-shrink-0" aria-label="Share">
+          <button onClick={() => shareContent({ title: salon.name, text: `Check out ${salon.name} on ChicSalon`, url: window.location.href })} className="w-11 h-11 min-w-[44px] min-h-[44px] rounded-full bg-card border border-border text-foreground flex items-center justify-center active:scale-90 transition-transform flex-shrink-0" aria-label="Share">
             <Share2 size={18} />
           </button>
           <div className="flex gap-2 ml-auto">
