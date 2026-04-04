@@ -249,7 +249,8 @@ const InstagramMediaDrawer = ({
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
 
