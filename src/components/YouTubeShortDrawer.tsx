@@ -45,7 +45,7 @@ const YouTubeShortDrawer = ({ open, onClose, videoId }: YouTubeShortDrawerProps)
 
   if (!open) return null;
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-[100]" style={{ isolation: 'isolate' }}>
       <div
         className={`absolute inset-0 bg-foreground/60 backdrop-blur-sm transition-opacity duration-300 ${
