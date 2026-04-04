@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { X, Instagram, ChevronLeft, ChevronRight, Play } from 'lucide-react';
 import InstagramEmbed from '@/components/InstagramEmbed';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -81,7 +82,7 @@ const InstagramMediaDrawer = ({
 
   if (!open || !current) return null;
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-[100]" style={{ isolation: 'isolate' }}>
       {/* Backdrop */}
       <div
@@ -248,7 +249,8 @@ const InstagramMediaDrawer = ({
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
 

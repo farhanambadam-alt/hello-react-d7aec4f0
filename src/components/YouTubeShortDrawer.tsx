@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { X, ChevronLeft, ChevronRight } from 'lucide-react';
 import YouTubeShort from '@/components/YouTubeShort';
 
@@ -44,7 +45,7 @@ const YouTubeShortDrawer = ({ open, onClose, videoId }: YouTubeShortDrawerProps)
 
   if (!open) return null;
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-[100]" style={{ isolation: 'isolate' }}>
       <div
         className={`absolute inset-0 bg-foreground/60 backdrop-blur-sm transition-opacity duration-300 ${
@@ -98,7 +99,8 @@ const YouTubeShortDrawer = ({ open, onClose, videoId }: YouTubeShortDrawerProps)
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
 
