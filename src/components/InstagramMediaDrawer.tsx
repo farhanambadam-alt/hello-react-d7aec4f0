@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { X, Instagram, ChevronLeft, ChevronRight, Play } from 'lucide-react';
 import InstagramEmbed from '@/components/InstagramEmbed';
 import { Skeleton } from '@/components/ui/skeleton';
