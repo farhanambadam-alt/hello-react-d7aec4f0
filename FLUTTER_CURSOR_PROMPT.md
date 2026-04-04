@@ -247,6 +247,55 @@ onWebViewCreated: (controller) {
 },
 ```
 
+### Share Content (Native Share Sheet)
+
+The React app calls `shareContent` when the user taps a Share button.
+Flutter must open the native share sheet using `share_plus`.
+
+**Add dependency to pubspec.yaml:**
+```yaml
+dependencies:
+  share_plus: ^7.0.0
+```
+
+**Register the handler alongside existing handlers in `onWebViewCreated`:**
+```dart
+controller.addJavaScriptHandler(
+  handlerName: 'shareContent',
+  callback: (args) {
+    final data = args.isNotEmpty ? args[0] as Map<String, dynamic> : {};
+    final title = data['title']?.toString() ?? '';
+    final text = data['text']?.toString() ?? '';
+    final url = data['url']?.toString() ?? '';
+    debugPrint('[SHARE] shareContent received: $title');
+    debugPrint('[SHARE] Opening native share sheet');
+    Share.share(
+      '$text\n$url',
+      subject: title,
+    );
+  },
+);
+```
+
+**Import:**
+```dart
+import 'package:share_plus/share_plus.dart';
+```
+
+**Bridge Contract:**
+| Field | Type | Description |
+|-------|------|-------------|
+| `title` | `String` | Name of salon/artist (used as share subject) |
+| `text` | `String` | Share message, e.g. "Check out X on ChicSalon" |
+| `url` | `String` | Full URL to the salon/artist page |
+
+**Rules:**
+- ❌ DO NOT break existing handlers (`routeChanged`, `mapActive`, `openDirections`)
+- ✅ Handler name MUST be exactly `shareContent`
+- ✅ Payload shape MUST match `{ title, text, url }`
+- ✅ Works on Android (primary) and iOS
+
+
 ### Flutter → React (Push Navigation)
 
 To navigate the web app from Flutter (e.g. deep link, push notification):
