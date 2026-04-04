@@ -124,7 +124,7 @@ const ArtistProfile = () => {
             >
               <Heart size={16} className={isFavorite ? 'text-destructive fill-destructive' : 'text-foreground'} />
             </button>
-            <button className="w-10 h-10 rounded-full bg-card/80 backdrop-blur-md flex items-center justify-center border border-border/30 min-h-[44px] min-w-[44px]">
+            <button onClick={() => shareContent({ title: artist?.name ?? 'Artist', text: `Check out ${artist?.name ?? 'this artist'} on ChicSalon`, url: window.location.href })} className="w-10 h-10 rounded-full bg-card/80 backdrop-blur-md flex items-center justify-center border border-border/30 min-h-[44px] min-w-[44px]">
               <Share2 size={16} className="text-foreground" />
             </button>
           </div>
