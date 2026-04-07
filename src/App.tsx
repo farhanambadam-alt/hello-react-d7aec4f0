@@ -75,6 +75,15 @@ const App = () => (
                     <Route path="/artist/:id" element={<ArtistProfile />} />
                     <Route path="/at-home-booking/:id" element={<AtHomeBooking />} />
                     <Route path="*" element={<NotFound />} />
+                    {/* Partner App Routes */}
+                    <Route path="/staff" element={<StaffHome />} />
+                    <Route path="/owner" element={<OwnerLayout />}>
+                      <Route index element={<OwnerDashboard />} />
+                      <Route path="services" element={<OwnerServices />} />
+                      <Route path="staff" element={<OwnerStaff />} />
+                      <Route path="calendar" element={<OwnerCalendar />} />
+                      <Route path="settings" element={<OwnerSettings />} />
+                    </Route>
                   </Routes>
                 </Suspense>
               </div>
