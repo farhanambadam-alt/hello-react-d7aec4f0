@@ -30,6 +30,13 @@ const AtHome = lazy(() => import("./pages/AtHome"));
 const ArtistProfile = lazy(() => import("./pages/ArtistProfile"));
 const AtHomeBooking = lazy(() => import("./pages/AtHomeBooking"));
 const NotFound = lazy(() => import("./pages/NotFound"));
+const StaffHome = lazy(() => import("./pages/partner/StaffHome"));
+const OwnerLayout = lazy(() => import("./pages/partner/OwnerLayout"));
+const OwnerDashboard = lazy(() => import("./pages/partner/OwnerDashboard"));
+const OwnerServices = lazy(() => import("./pages/partner/OwnerServices"));
+const OwnerStaff = lazy(() => import("./pages/partner/OwnerStaff"));
+const OwnerCalendar = lazy(() => import("./pages/partner/OwnerCalendar"));
+const OwnerSettings = lazy(() => import("./pages/partner/OwnerSettings"));
 
 const queryClient = new QueryClient();
 
