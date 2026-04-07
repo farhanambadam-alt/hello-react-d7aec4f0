@@ -74,7 +74,6 @@ const App = () => (
                     <Route path="/at-home" element={<AtHome />} />
                     <Route path="/artist/:id" element={<ArtistProfile />} />
                     <Route path="/at-home-booking/:id" element={<AtHomeBooking />} />
-                    <Route path="*" element={<NotFound />} />
                     {/* Partner App Routes */}
                     <Route path="/staff" element={<StaffHome />} />
                     <Route path="/owner" element={<OwnerLayout />}>
@@ -84,6 +83,7 @@ const App = () => (
                       <Route path="calendar" element={<OwnerCalendar />} />
                       <Route path="settings" element={<OwnerSettings />} />
                     </Route>
+                    <Route path="*" element={<NotFound />} />
                   </Routes>
                 </Suspense>
               </div>
