@@ -1,11 +1,8 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import {
-  User, Clock, CheckCircle, Smartphone, BellRing,
-  Coffee, Check, Plus, Banknote, CreditCard, History,
-  List, Calendar, MapPin, Hash, ChevronRight, AlertCircle, Play,
-  Settings, Award, TrendingUp, LogOut, ChevronLeft,
-  Star, MessageSquare, Camera, Scissors, Quote, Trash2,
-  ExternalLink, Zap, X, AlertTriangle, ArrowRight
+  User, Clock, Coffee, Plus, Hash,
+  List, Award, Smartphone,
+  X, AlertTriangle, ArrowRight, Play, CheckCircle, Users
 } from 'lucide-react';
 
 // --- TYPES ---
@@ -22,11 +19,11 @@ interface Booking {
   name: string;
   barberId: string;
   type: 'online' | 'walkin';
-  status: 'serving' | 'waiting';
-  scheduledTime: string;
+  status: 'serving' | 'waiting' | 'completed';
+  startMins: number; // absolute minutes from midnight
+  duration: number;
   queueNo: number;
   services: string[];
-  duration: number;
   price: number;
 }
 
@@ -35,6 +32,11 @@ interface ServiceItem {
   name: string;
   price: number;
   duration: number;
+}
+
+interface BreakBlock {
+  startMins: number;
+  endMins: number;
 }
 
 // --- DATA ---
@@ -53,19 +55,6 @@ const SERVICES: ServiceItem[] = [
 ];
 
 // --- TIME HELPERS ---
-const timeToMins = (timeStr: string): number => {
-  if (!timeStr) return 0;
-  const parts = timeStr.split(' ');
-  const time = parts[0];
-  const period = parts[1];
-  const timeParts = time.split(':').map(Number);
-  let h = timeParts[0];
-  const m = timeParts[1] || 0;
-  if (period?.toUpperCase() === 'PM' && h !== 12) h += 12;
-  if (period?.toUpperCase() === 'AM' && h === 12) h = 0;
-  return h * 60 + m;
-};
-
 const minsToTime = (mins: number): string => {
   let h = Math.floor(mins / 60);
   const m = Math.floor(mins % 60);
@@ -75,9 +64,47 @@ const minsToTime = (mins: number): string => {
   return `${h}:${m.toString().padStart(2, '0')} ${period}`;
 };
 
-const OPEN_TIME = 9 * 60;
-const CLOSE_TIME = 21 * 60;
-const SLOT_INTERVAL = 30;
+const OPEN_TIME = 9 * 60;  // 9 AM
+const CLOSE_TIME = 21 * 60; // 9 PM
+const TOTAL_MINS = CLOSE_TIME - OPEN_TIME; // 720 mins
+const PX_PER_MIN = 3; // each minute = 3px height
+const TIMELINE_HEIGHT = TOTAL_MINS * PX_PER_MIN; // 2160px
+
+// --- SLOT FINDER: finds next gap for a barber given existing bookings + breaks ---
+const findNextSlot = (
+  barberId: string,
+  duration: number,
+  bookings: Booking[],
+  breakBlock: BreakBlock | null,
+  nowMins: number
+): number | null => {
+  const occupied = bookings
+    .filter(b => b.barberId === barberId && b.status !== 'completed')
+    .map(b => ({ start: b.startMins, end: b.startMins + b.duration }));
+
+  if (breakBlock) {
+    occupied.push({ start: breakBlock.startMins, end: breakBlock.endMins });
+  }
+
+  occupied.sort((a, b) => a.start - b.start);
+
+  let pointer = Math.max(nowMins, OPEN_TIME);
+
+  for (let i = 0; i < 500; i++) { // safety limit
+    if (pointer + duration > CLOSE_TIME) return null;
+
+    const conflict = occupied.find(o =>
+      (pointer < o.end && pointer + duration > o.start)
+    );
+
+    if (conflict) {
+      pointer = conflict.end;
+    } else {
+      return pointer;
+    }
+  }
+  return null;
+};
 
 // --- DURATION DIAL ---
 const DurationDial: React.FC<{ value: number; onChange: (v: number) => void }> = ({ value, onChange }) => {
@@ -98,10 +125,10 @@ const DurationDial: React.FC<{ value: number; onChange: (v: number) => void }> =
   const rotation = (value / 120) * 360;
 
   return (
-    <div className="flex items-center justify-center py-4">
+    <div className="flex items-center justify-center py-2">
       <div
         ref={dialRef}
-        className="relative w-40 h-40 rounded-full cursor-pointer select-none"
+        className="relative w-36 h-36 rounded-full cursor-pointer select-none"
         onMouseMove={(e) => isDragging && handleUpdate(e.clientX, e.clientY)}
         onMouseDown={() => setIsDragging(true)}
         onMouseUp={() => setIsDragging(false)}
@@ -121,8 +148,8 @@ const DurationDial: React.FC<{ value: number; onChange: (v: number) => void }> =
           />
         </svg>
         <div className="absolute inset-0 flex flex-col items-center justify-center">
-          <span className="text-4xl font-black text-zinc-900">{value}</span>
-          <span className="text-xs font-bold text-zinc-400 tracking-widest">MINS</span>
+          <span className="text-3xl font-black text-zinc-900">{value}</span>
+          <span className="text-[10px] font-bold text-zinc-400 tracking-widest">MINS</span>
         </div>
         <div
           className="absolute w-5 h-5 bg-indigo-600 rounded-full shadow-lg border-2 border-white"
@@ -141,19 +168,29 @@ const DurationDial: React.FC<{ value: number; onChange: (v: number) => void }> =
 export default function Staff() {
   const [activeBarberTab, setActiveBarberTab] = useState('b1');
   const [viewMode, setViewMode] = useState<'queue' | 'profile'>('queue');
-  const [barberOnBreak, setBarberOnBreak] = useState<Record<string, boolean>>({ b1: false, b2: false, b3: false });
-  const [breakDetails, setBreakDetails] = useState<Record<string, { startMins: number; endMins: number; end: string } | null>>({ b1: null, b2: null, b3: null });
+  const [barberBreaks, setBarberBreaks] = useState<Record<string, BreakBlock | null>>({ b1: null, b2: null, b3: null });
   const [currentTime, setCurrentTime] = useState(new Date());
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const timelineRef = useRef<HTMLDivElement>(null);
+
+  const nowMins = currentTime.getHours() * 60 + currentTime.getMinutes();
 
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
     return () => clearInterval(timer);
   }, []);
 
+  // Auto-scroll timeline to current time on mount
+  useEffect(() => {
+    if (timelineRef.current) {
+      const scrollTo = Math.max(0, (nowMins - OPEN_TIME) * PX_PER_MIN - 100);
+      timelineRef.current.scrollTop = scrollTo;
+    }
+  }, [activeBarberTab]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const [bookings, setBookings] = useState<Booking[]>([
-    { id: 1, name: 'Rahul M.', barberId: 'b1', type: 'online', status: 'serving', scheduledTime: '10:00 AM', queueNo: 1, services: ['Skin Fade', 'Beard Trim'], duration: 45, price: 400 },
-    { id: 2, name: 'Amit Singh', barberId: 'b1', type: 'online', status: 'waiting', scheduledTime: '11:00 AM', queueNo: 2, services: ['Haircut'], duration: 30, price: 250 },
+    { id: 1, name: 'Rahul M.', barberId: 'b1', type: 'online', status: 'serving', startMins: 10 * 60, queueNo: 1, services: ['Skin Fade', 'Beard Trim'], duration: 45, price: 400 },
+    { id: 2, name: 'Amit Singh', barberId: 'b1', type: 'online', status: 'waiting', startMins: 11 * 60, queueNo: 2, services: ['Haircut'], duration: 30, price: 250 },
   ]);
 
   const [wiDrawer, setWiDrawer] = useState<{ open: boolean; barberId: string | null }>({ open: false, barberId: null });
@@ -161,7 +198,12 @@ export default function Staff() {
   const [walkInName, setWalkInName] = useState('');
   const [manualDuration, setManualDuration] = useState(30);
 
-  const completeService = (id: number) => setBookings(prev => prev.filter(b => b.id !== id));
+  // Global queue counter
+  const nextQueueNo = useMemo(() => Math.max(0, ...bookings.map(b => b.queueNo)) + 1, [bookings]);
+
+  const completeService = (id: number) => {
+    setBookings(prev => prev.map(b => b.id === id ? { ...b, status: 'completed' as const } : b));
+  };
 
   const startJob = (id: number) => {
     const target = bookings.find(b => b.id === id);
@@ -175,50 +217,11 @@ export default function Staff() {
     );
   };
 
-  const handleBreak = (barberId: string, duration: number) => {
-    const nowMins = currentTime.getHours() * 60 + currentTime.getMinutes();
-    setBarberOnBreak(prev => ({ ...prev, [barberId]: true }));
-    setBreakDetails(prev => ({
-      ...prev,
-      [barberId]: { startMins: nowMins, endMins: nowMins + duration, end: minsToTime(nowMins + duration) },
-    }));
-  };
-
-  const getNextAvailableSlot = useCallback((barberId: string, duration: number): number | null => {
-    const nowMins = currentTime.getHours() * 60 + currentTime.getMinutes();
-    const barberBookings = bookings
-      .filter(b => b.barberId === barberId)
-      .map(b => ({ start: timeToMins(b.scheduledTime), end: timeToMins(b.scheduledTime) + b.duration }))
-      .sort((a, b) => a.start - b.start);
-
-    const breakData = barberOnBreak[barberId] ? breakDetails[barberId] : null;
-    let searchPointer = Math.max(nowMins, OPEN_TIME);
-    let found = false;
-
-    while (!found && searchPointer + duration <= CLOSE_TIME) {
-      const bookingConflict = barberBookings.find(b =>
-        (searchPointer >= b.start && searchPointer < b.end) ||
-        (searchPointer + duration > b.start && searchPointer + duration <= b.end) ||
-        (searchPointer <= b.start && searchPointer + duration >= b.end)
-      );
-      const breakConflict = breakData && searchPointer < breakData.endMins && searchPointer + duration > breakData.startMins;
-
-      if (bookingConflict) {
-        searchPointer = bookingConflict.end;
-      } else if (breakConflict && breakData) {
-        searchPointer = breakData.endMins;
-      } else {
-        found = true;
-      }
-    }
-
-    return found ? searchPointer : null;
-  }, [bookings, barberOnBreak, breakDetails, currentTime]);
-
+  // Next available slot for walk-in drawer
   const nextSlot = useMemo(() => {
     if (!wiDrawer.open || !wiDrawer.barberId) return null;
-    return getNextAvailableSlot(wiDrawer.barberId, manualDuration);
-  }, [wiDrawer.open, wiDrawer.barberId, manualDuration, getNextAvailableSlot]);
+    return findNextSlot(wiDrawer.barberId, manualDuration, bookings, barberBreaks[wiDrawer.barberId], nowMins);
+  }, [wiDrawer.open, wiDrawer.barberId, manualDuration, bookings, barberBreaks, nowMins]);
 
   const addWalkIn = () => {
     if (!wiDrawer.barberId || nextSlot === null) return;
@@ -229,8 +232,8 @@ export default function Staff() {
       barberId: wiDrawer.barberId!,
       type: 'walkin',
       status: 'waiting',
-      scheduledTime: minsToTime(nextSlot),
-      queueNo: p.length + 1,
+      startMins: nextSlot,
+      queueNo: nextQueueNo,
       services: svcs.map(s => s.name),
       duration: manualDuration,
       price: svcs.reduce((acc, curr) => acc + curr.price, 0),
@@ -241,145 +244,202 @@ export default function Staff() {
     setManualDuration(30);
   };
 
-  const timeSlots = useMemo(() => {
-    const slots: number[] = [];
-    for (let m = OPEN_TIME; m < CLOSE_TIME; m += SLOT_INTERVAL) slots.push(m);
-    return slots;
+  // --- Hour markers for the timeline ---
+  const hourMarkers = useMemo(() => {
+    const marks: number[] = [];
+    for (let h = Math.ceil(OPEN_TIME / 60); h <= Math.floor(CLOSE_TIME / 60); h++) {
+      marks.push(h * 60);
+    }
+    return marks;
   }, []);
 
+  // --- RENDER PROPORTIONAL TIMELINE ---
   const renderTimeline = (barber: Barber) => {
-    const bBookings = bookings.filter(b => b.barberId === barber.id);
+    const bBookings = bookings.filter(b => b.barberId === barber.id && b.status !== 'completed');
+    const activeBookings = bBookings.sort((a, b) => a.startMins - b.startMins);
+    const breakBlock = barberBreaks[barber.id];
+    const waitingQueue = bBookings.filter(b => b.status === 'waiting').sort((a, b) => a.startMins - b.startMins);
+
+    // Current time needle position
+    const needleY = nowMins >= OPEN_TIME && nowMins <= CLOSE_TIME
+      ? (nowMins - OPEN_TIME) * PX_PER_MIN
+      : -1;
 
     return (
-      <div key={barber.id} className={activeBarberTab === barber.id ? 'block' : 'hidden'}>
-        {/* Barber Header */}
-        <div className="bg-zinc-900 text-white rounded-3xl p-5 mx-4 mt-4">
+      <div key={barber.id} className={activeBarberTab === barber.id ? 'flex flex-col flex-1 min-h-0' : 'hidden'}>
+        {/* Barber Header Card */}
+        <div className="bg-zinc-900 text-white rounded-3xl p-4 mx-4 mt-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className={`w-12 h-12 rounded-2xl flex items-center justify-center font-black text-sm ${barber.color}`}>
+              <div className={`w-11 h-11 rounded-xl flex items-center justify-center font-black text-xs ${barber.color}`}>
                 {barber.init}
               </div>
               <div>
-                <p className="font-black text-lg">{barber.name}</p>
-                <div className="flex items-center gap-1.5 text-xs">
-                  <div className={`w-2 h-2 rounded-full ${barberOnBreak[barber.id] ? 'bg-amber-400' : 'bg-emerald-400'}`} />
-                  <span className="text-white/60 font-bold tracking-wider uppercase">
-                    {barberOnBreak[barber.id] ? `Break: ends ${breakDetails[barber.id]?.end}` : 'Serving Walk-ins'}
+                <p className="font-black text-base">{barber.name}</p>
+                <div className="flex items-center gap-1.5 text-[10px]">
+                  <div className={`w-1.5 h-1.5 rounded-full ${breakBlock ? 'bg-amber-400' : 'bg-emerald-400'}`} />
+                  <span className="text-white/50 font-bold tracking-wider uppercase">
+                    {breakBlock ? `Break until ${minsToTime(breakBlock.endMins)}` : `${waitingQueue.length} in queue`}
                   </span>
                 </div>
               </div>
             </div>
-            <div className="flex items-center gap-1.5 text-white/40 text-xs font-bold">
-              <Clock size={12} />
-              {currentTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+            {/* Live clock */}
+            <div className="bg-white/10 rounded-xl px-3 py-2 flex items-center gap-1.5">
+              <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              <span className="text-white font-black text-sm tabular-nums">
+                {currentTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+              </span>
             </div>
           </div>
         </div>
 
-        {/* Content */}
-        <div className="px-4 pb-32">
-          {viewMode === 'queue' ? (
-            <div className="mt-4">
-              {/* Queue header */}
-              <div className="flex items-center justify-between mb-4">
-                <div>
-                  <p className="font-black text-zinc-900 text-sm tracking-tight">Queue Logic</p>
-                  <p className="text-xs text-zinc-400 font-bold">{bBookings.filter(b => b.type === 'walkin').length} Pending Walk-ins</p>
-                </div>
-                <button
-                  onClick={() => setWiDrawer({ open: true, barberId: barber.id })}
-                  className="bg-indigo-600 text-white px-6 py-3 rounded-3xl text-xs font-black flex items-center gap-2 shadow-xl active:scale-95 transition-all"
-                >
-                  <Plus size={14} /> QUEUE CUSTOMER
-                </button>
+        {/* Queue Summary Strip */}
+        {waitingQueue.length > 0 && viewMode === 'queue' && (
+          <div className="mx-4 mt-2 bg-indigo-50 rounded-2xl p-3">
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-1.5">
+                <Users size={13} className="text-indigo-600" />
+                <span className="text-[11px] font-black text-indigo-600 tracking-wider uppercase">Live Queue</span>
               </div>
+              <span className="text-[10px] font-bold text-indigo-400">{waitingQueue.length} waiting</span>
+            </div>
+            <div className="flex gap-1.5 overflow-x-auto no-scrollbar">
+              {waitingQueue.map((b, i) => (
+                <div key={b.id} className="flex-shrink-0 bg-white rounded-xl px-3 py-2 border border-indigo-100 min-w-[120px]">
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-5 h-5 rounded-full bg-indigo-600 text-white text-[9px] font-black flex items-center justify-center">{i + 1}</span>
+                    <span className="text-xs font-black text-zinc-800 truncate">{b.name}</span>
+                  </div>
+                  <p className="text-[10px] font-bold text-indigo-500 mt-0.5 ml-6.5">
+                    EST {minsToTime(b.startMins)} · {b.duration}m
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
-              {/* Timeline slots */}
-              <div className="space-y-1">
-                {timeSlots.map(mins => {
-                  const booking = bBookings.find(b => {
-                    const bStart = timeToMins(b.scheduledTime);
-                    const bEnd = bStart + b.duration;
-                    return mins >= bStart && mins < bEnd;
-                  });
+        {/* Queue / Add button */}
+        {viewMode === 'queue' && (
+          <div className="flex items-center justify-between px-4 mt-3 mb-1">
+            <p className="text-xs font-black text-zinc-400 uppercase tracking-wider">Timeline</p>
+            <button
+              onClick={() => setWiDrawer({ open: true, barberId: barber.id })}
+              className="bg-indigo-600 text-white px-4 py-2.5 rounded-2xl text-[11px] font-black flex items-center gap-1.5 shadow-lg active:scale-95 transition-all"
+            >
+              <Plus size={13} /> WALK-IN
+            </button>
+          </div>
+        )}
 
-                  const isBreak = barberOnBreak[barber.id] && breakDetails[barber.id] &&
-                    mins >= breakDetails[barber.id]!.startMins && mins < breakDetails[barber.id]!.endMins;
+        {/* PROPORTIONAL TIMELINE */}
+        {viewMode === 'queue' ? (
+          <div ref={timelineRef} className="flex-1 overflow-y-auto px-4 pb-28 relative" style={{ WebkitOverflowScrolling: 'touch' }}>
+            <div className="relative ml-14" style={{ height: TIMELINE_HEIGHT }}>
+              {/* Hour gridlines + labels */}
+              {hourMarkers.map(hm => {
+                const y = (hm - OPEN_TIME) * PX_PER_MIN;
+                return (
+                  <div key={hm} className="absolute left-0 right-0" style={{ top: y }}>
+                    {/* Label in gutter */}
+                    <div className="absolute -left-14 w-12 text-right -translate-y-1/2">
+                      <span className="text-[11px] font-black text-zinc-300 leading-none">{minsToTime(hm).split(' ')[0]}</span>
+                      <span className="text-[8px] font-bold text-zinc-300/50 ml-0.5">{minsToTime(hm).split(' ')[1]}</span>
+                    </div>
+                    {/* Grid line */}
+                    <div className="h-[1px] bg-zinc-100 w-full" />
+                  </div>
+                );
+              })}
 
-                  return (
-                    <div key={mins} className="flex gap-3">
-                      {/* Time label */}
-                      <div className="w-14 text-right pt-3 flex-shrink-0">
-                        <span className="text-[11px] font-black text-zinc-300 block leading-none">{minsToTime(mins).split(' ')[0]}</span>
-                        <span className="text-[9px] font-bold text-zinc-300/60">{minsToTime(mins).split(' ')[1]}</span>
-                      </div>
+              {/* Vertical spine */}
+              <div className="absolute left-0 top-0 bottom-0 w-[2px] bg-zinc-100 ml-3" />
 
-                      {/* Slot content */}
-                      <div className="flex-1 relative min-h-[48px]">
-                        {/* Timeline line */}
-                        <div className="absolute left-4 top-0 bottom-0 w-[2px] bg-zinc-100" />
-                        <div className="absolute left-[13px] top-4 w-[6px] h-[6px] rounded-full bg-zinc-200 border-2 border-white" />
+              {/* NOW needle */}
+              {needleY >= 0 && (
+                <div className="absolute left-0 right-0 z-30 flex items-center" style={{ top: needleY }}>
+                  <div className="w-2.5 h-2.5 rounded-full bg-red-500 -ml-[1px] shadow-md" />
+                  <div className="flex-1 h-[2px] bg-red-500/60" />
+                  <span className="text-[9px] font-black text-red-500 bg-red-50 px-1.5 py-0.5 rounded ml-1">NOW</span>
+                </div>
+              )}
 
-                        {booking ? (
-                          <div className={`ml-8 rounded-3xl p-4 ${booking.status === 'serving' ? 'bg-indigo-600 text-white' : 'bg-zinc-50 border-2 border-zinc-100 text-zinc-900'}`}>
-                            <div className="flex items-start justify-between mb-2">
-                              <div>
-                                <div className="flex items-center gap-2 mb-1">
-                                  <span className={`text-[10px] font-black tracking-widest px-2 py-0.5 rounded-full ${booking.status === 'serving' ? 'bg-white/20 text-white' : 'bg-zinc-200 text-zinc-600'}`}>
-                                    QUEUE #{booking.queueNo}
-                                  </span>
-                                  <span className={`text-[10px] font-bold flex items-center gap-1 ${booking.status === 'serving' ? 'text-white/70' : 'text-zinc-400'}`}>
-                                    {booking.type === 'online' ? <Smartphone size={10} /> : <User size={10} />} {booking.type}
-                                  </span>
-                                </div>
-                                <p className="font-black text-base">{booking.name}</p>
-                              </div>
-                              <div className={`text-right text-[10px] font-bold ${booking.status === 'serving' ? 'text-white/60' : 'text-zinc-400'}`}>
-                                <span className="block">{booking.duration} MIN</span>
-                                <span>EST. START: {booking.scheduledTime}</span>
-                              </div>
-                            </div>
+              {/* Break block */}
+              {breakBlock && (
+                <div
+                  className="absolute left-8 right-0 bg-amber-50 border-2 border-amber-200/50 rounded-2xl flex items-center gap-2 px-3 z-10"
+                  style={{
+                    top: (breakBlock.startMins - OPEN_TIME) * PX_PER_MIN,
+                    height: Math.max(40, (breakBlock.endMins - breakBlock.startMins) * PX_PER_MIN),
+                  }}
+                >
+                  <Coffee size={14} className="text-amber-500 flex-shrink-0" />
+                  <div>
+                    <p className="font-black text-xs text-amber-700">Break</p>
+                    <p className="text-[9px] font-bold text-amber-400">{minsToTime(breakBlock.startMins)} – {minsToTime(breakBlock.endMins)}</p>
+                  </div>
+                </div>
+              )}
 
-                            <div className="flex gap-2 mt-3">
-                              {booking.status === 'serving' ? (
-                                <button onClick={() => completeService(booking.id)} className="flex-1 bg-white text-indigo-600 py-3.5 rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg active:scale-95 transition-all">
-                                  COMPLETE
-                                </button>
-                              ) : (
-                                <button onClick={() => startJob(booking.id)} className="flex-1 bg-zinc-900 text-white py-3.5 rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl active:scale-95 transition-all">
-                                  START JOB
-                                </button>
-                              )}
-                            </div>
-                          </div>
-                        ) : isBreak ? (
-                          <div className="ml-8 rounded-3xl p-4 bg-amber-50 border-2 border-amber-200/50">
-                            <div className="flex items-center gap-2">
-                              <Coffee size={16} className="text-amber-500" />
-                              <div>
-                                <p className="font-black text-sm text-amber-700">Barber Break</p>
-                                <p className="text-[10px] font-bold text-amber-400">Reserved Time Block</p>
-                              </div>
-                            </div>
-                          </div>
-                        ) : (
-                          <div
-                            className="ml-8 rounded-2xl p-3 border-2 border-dashed border-zinc-100 cursor-pointer hover:border-indigo-200 hover:bg-indigo-50/30 transition-all"
-                            onClick={() => setWiDrawer({ open: true, barberId: barber.id })}
-                          >
-                            <div className="flex items-center gap-2 text-zinc-300">
-                              <Plus size={14} />
-                              <span className="text-xs font-bold">Available Slot</span>
-                            </div>
-                          </div>
-                        )}
+              {/* Booking blocks — proportional height */}
+              {activeBookings.map(booking => {
+                const top = (booking.startMins - OPEN_TIME) * PX_PER_MIN;
+                const height = Math.max(60, booking.duration * PX_PER_MIN);
+                const isServing = booking.status === 'serving';
+
+                return (
+                  <div
+                    key={booking.id}
+                    className={`absolute left-8 right-0 rounded-2xl p-3 z-20 transition-all ${
+                      isServing
+                        ? 'bg-indigo-600 text-white shadow-xl shadow-indigo-600/20'
+                        : 'bg-white border-2 border-zinc-100 text-zinc-900 shadow-sm'
+                    }`}
+                    style={{ top, height, minHeight: 60 }}
+                  >
+                    {/* Connector dot */}
+                    <div className={`absolute -left-[22px] top-4 w-2.5 h-2.5 rounded-full border-2 border-white shadow ${isServing ? 'bg-indigo-600' : 'bg-zinc-300'}`} />
+
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5 mb-0.5">
+                          <span className={`text-[9px] font-black tracking-widest px-1.5 py-[1px] rounded-full ${isServing ? 'bg-white/20' : 'bg-zinc-100 text-zinc-500'}`}>
+                            #{booking.queueNo}
+                          </span>
+                          <span className={`text-[9px] font-bold flex items-center gap-0.5 ${isServing ? 'text-white/60' : 'text-zinc-400'}`}>
+                            {booking.type === 'online' ? <Smartphone size={9} /> : <User size={9} />}
+                            {booking.type}
+                          </span>
+                        </div>
+                        <p className="font-black text-sm truncate">{booking.name}</p>
+                        <p className={`text-[10px] font-bold mt-0.5 ${isServing ? 'text-white/50' : 'text-zinc-400'}`}>
+                          {minsToTime(booking.startMins)} – {minsToTime(booking.startMins + booking.duration)} · {booking.duration}m
+                        </p>
                       </div>
                     </div>
-                  );
-                })}
-              </div>
+
+                    {/* Actions — only show if card is tall enough */}
+                    {height >= 90 && (
+                      <div className="flex gap-2 mt-2">
+                        {isServing ? (
+                          <button onClick={() => completeService(booking.id)} className="flex-1 bg-white text-indigo-600 py-2.5 rounded-xl font-black text-[10px] uppercase tracking-widest shadow active:scale-95 transition-all flex items-center justify-center gap-1">
+                            <CheckCircle size={12} /> COMPLETE
+                          </button>
+                        ) : (
+                          <button onClick={() => startJob(booking.id)} className="flex-1 bg-zinc-900 text-white py-2.5 rounded-xl font-black text-[10px] uppercase tracking-widest shadow active:scale-95 transition-all flex items-center justify-center gap-1">
+                            <Play size={12} /> START
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
-          ) : (
+          </div>
+        ) : (
+          <div className="flex-1 overflow-y-auto pb-28">
             <div className="mt-6 text-center py-12">
               <div className="w-20 h-20 rounded-3xl bg-zinc-100 flex items-center justify-center mx-auto mb-4">
                 <Award size={32} className="text-zinc-400" />
@@ -387,37 +447,37 @@ export default function Staff() {
               <p className="font-black text-zinc-900 text-lg">{barber.name}'s Profile</p>
               <p className="text-sm text-zinc-400 mt-1">Barber Analytics</p>
             </div>
-          )}
-        </div>
+          </div>
+        )}
       </div>
     );
   };
 
   return (
-    <div className="min-h-screen bg-white pb-20">
+    <div className="h-screen flex flex-col bg-white overflow-hidden">
       {/* Top Tab Bar */}
-      <div className="flex gap-2 px-4 py-4 overflow-x-auto no-scrollbar">
+      <div className="flex gap-2 px-4 py-3 overflow-x-auto no-scrollbar flex-shrink-0">
         {BARBERS.map(b => (
           <button
             key={b.id}
             onClick={() => setActiveBarberTab(b.id)}
-            className={`flex-1 min-w-[110px] py-3.5 rounded-2xl transition-all flex items-center justify-center gap-2 border-2 text-sm ${
+            className={`flex-1 min-w-[100px] py-3 rounded-2xl transition-all flex items-center justify-center gap-2 border-2 text-sm ${
               activeBarberTab === b.id
                 ? 'border-zinc-900 bg-zinc-900 text-white shadow-xl scale-[1.02]'
                 : 'border-zinc-100 bg-zinc-50 text-zinc-400 opacity-60'
             }`}
           >
             <span className="font-black text-xs">{b.init}</span>
-            <span className="font-bold">{b.name}</span>
+            <span className="font-bold text-xs">{b.name}</span>
           </button>
         ))}
       </div>
 
-      {/* Timelines */}
+      {/* Timeline panels */}
       {BARBERS.map(b => renderTimeline(b))}
 
       {/* Bottom Nav */}
-      <div className="fixed bottom-0 left-0 right-0 bg-zinc-900 rounded-t-[2rem] px-4 py-2 z-50 safe-area-bottom">
+      <div className="fixed bottom-0 left-0 right-0 bg-zinc-900 rounded-t-[2rem] px-4 py-2 z-50 safe-area-bottom flex-shrink-0">
         <div className="flex">
           <button
             onClick={() => setViewMode('queue')}
@@ -456,71 +516,107 @@ export default function Staff() {
         <div className="fixed inset-0 z-[100]">
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setWiDrawer({ open: false, barberId: null })} />
           <div className="absolute bottom-0 left-0 right-0 bg-white rounded-t-[2.5rem] max-h-[90vh] flex flex-col animate-slide-up">
-            {/* Drawer handle */}
-            <div className="flex justify-center pt-3 pb-1">
-              <div className="w-12 h-1.5 rounded-full bg-zinc-200" />
-            </div>
+            <div className="flex justify-center pt-3 pb-1"><div className="w-12 h-1.5 rounded-full bg-zinc-200" /></div>
 
             {/* Drawer header */}
-            <div className="flex items-center justify-between px-6 py-4">
+            <div className="flex items-center justify-between px-6 py-3 flex-shrink-0">
               <div>
-                <p className="font-black text-2xl text-zinc-900">Add Walk-in</p>
-                <div className="flex items-center gap-1.5 mt-1">
-                  <Hash size={12} className="text-indigo-600" />
-                  <span className="text-xs font-black text-indigo-600 tracking-wider">QUEUE POSITION #{bookings.length + 1}</span>
+                <p className="font-black text-xl text-zinc-900">Add Walk-in</p>
+                <div className="flex items-center gap-1.5 mt-0.5">
+                  <Hash size={11} className="text-indigo-600" />
+                  <span className="text-[10px] font-black text-indigo-600 tracking-wider">QUEUE #{nextQueueNo}</span>
                 </div>
               </div>
-              <button onClick={() => setWiDrawer({ open: false, barberId: null })} className="p-3 bg-zinc-50 rounded-2xl text-zinc-400 active:scale-90 transition-all">
-                <X size={18} />
+              <button onClick={() => setWiDrawer({ open: false, barberId: null })} className="p-2.5 bg-zinc-50 rounded-xl text-zinc-400 active:scale-90 transition-all">
+                <X size={16} />
               </button>
             </div>
 
             {/* Drawer body */}
-            <div className="flex-1 overflow-y-auto px-6 pb-4 space-y-6">
-              {/* Estimated Start */}
-              <div className="bg-zinc-50 rounded-3xl p-5 flex items-center justify-between">
-                <div>
-                  <p className="text-xs font-bold text-zinc-400 uppercase tracking-wider">Estimated Start</p>
-                  <p className="text-2xl font-black text-zinc-900 mt-1">{nextSlot !== null ? minsToTime(nextSlot) : 'No Gaps!'}</p>
+            <div className="flex-1 overflow-y-auto px-6 pb-4 space-y-5">
+              {/* Estimated Start + Live Clock */}
+              <div className="flex gap-2">
+                <div className="flex-1 bg-zinc-50 rounded-2xl p-4">
+                  <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Start Time</p>
+                  <p className="text-xl font-black text-zinc-900 mt-0.5">{nextSlot !== null ? minsToTime(nextSlot) : 'Full!'}</p>
                 </div>
-                <div className="w-12 h-12 rounded-2xl bg-indigo-100 flex items-center justify-center">
-                  <Clock size={20} className="text-indigo-600" />
+                <div className="bg-indigo-50 rounded-2xl p-4 flex flex-col items-center justify-center min-w-[90px]">
+                  <p className="text-[10px] font-bold text-indigo-400 uppercase tracking-wider">Now</p>
+                  <p className="text-lg font-black text-indigo-600 tabular-nums">
+                    {currentTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </p>
                 </div>
               </div>
 
+              {/* Timeline preview — visual block */}
+              {nextSlot !== null && (
+                <div className="bg-zinc-50 rounded-2xl p-3">
+                  <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-2">Timeline Preview</p>
+                  <div className="relative h-12 bg-zinc-100 rounded-xl overflow-hidden">
+                    {/* Existing bookings for this barber (mini) */}
+                    {bookings
+                      .filter(b => b.barberId === wiDrawer.barberId && b.status !== 'completed')
+                      .map(b => {
+                        const left = ((b.startMins - OPEN_TIME) / TOTAL_MINS) * 100;
+                        const width = (b.duration / TOTAL_MINS) * 100;
+                        return (
+                          <div key={b.id} className="absolute top-1 bottom-1 bg-zinc-300 rounded-lg" style={{ left: `${left}%`, width: `${width}%` }} />
+                        );
+                      })
+                    }
+                    {/* New booking preview */}
+                    <div
+                      className="absolute top-1 bottom-1 bg-indigo-500 rounded-lg border-2 border-indigo-300 animate-pulse"
+                      style={{
+                        left: `${((nextSlot - OPEN_TIME) / TOTAL_MINS) * 100}%`,
+                        width: `${(manualDuration / TOTAL_MINS) * 100}%`,
+                      }}
+                    />
+                    {/* Now marker */}
+                    {nowMins >= OPEN_TIME && nowMins <= CLOSE_TIME && (
+                      <div className="absolute top-0 bottom-0 w-[2px] bg-red-500 z-10" style={{ left: `${((nowMins - OPEN_TIME) / TOTAL_MINS) * 100}%` }} />
+                    )}
+                  </div>
+                  <div className="flex justify-between mt-1">
+                    <span className="text-[8px] text-zinc-300 font-bold">9 AM</span>
+                    <span className="text-[8px] text-zinc-300 font-bold">9 PM</span>
+                  </div>
+                </div>
+              )}
+
               {/* Name input */}
               <div>
-                <p className="text-xs font-black text-zinc-400 uppercase tracking-wider mb-2">Customer Profile</p>
+                <p className="text-[10px] font-black text-zinc-400 uppercase tracking-wider mb-1.5">Client Name</p>
                 <input
                   value={walkInName}
                   onChange={(e) => setWalkInName(e.target.value)}
-                  placeholder="ENTER CLIENT NAME"
-                  className="w-full bg-zinc-50 border-2 border-zinc-100 rounded-2xl p-4 font-black text-lg outline-none focus:border-indigo-600 focus:bg-white transition-all"
+                  placeholder="Enter name..."
+                  className="w-full bg-zinc-50 border-2 border-zinc-100 rounded-2xl p-3.5 font-bold text-base outline-none focus:border-indigo-600 focus:bg-white transition-all"
                 />
               </div>
 
               {/* Duration dial */}
               <div>
-                <p className="text-xs font-black text-zinc-400 uppercase tracking-wider mb-2">Set Service Duration</p>
+                <p className="text-[10px] font-black text-zinc-400 uppercase tracking-wider mb-1">Duration</p>
                 <DurationDial value={manualDuration} onChange={setManualDuration} />
               </div>
 
               {/* Services */}
               <div>
-                <p className="text-xs font-black text-zinc-400 uppercase tracking-wider mb-2">Select Services</p>
+                <p className="text-[10px] font-black text-zinc-400 uppercase tracking-wider mb-1.5">Services</p>
                 <div className="grid grid-cols-2 gap-2">
                   {SERVICES.map(s => (
                     <button
                       key={s.id}
                       onClick={() => setSelectedServices(p => p.includes(s.id) ? p.filter(x => x !== s.id) : [...p, s.id])}
-                      className={`p-4 rounded-2xl border-2 text-left transition-all ${
+                      className={`p-3 rounded-xl border-2 text-left transition-all ${
                         selectedServices.includes(s.id)
-                          ? 'border-zinc-900 bg-zinc-900 text-white shadow-xl scale-[1.02]'
+                          ? 'border-zinc-900 bg-zinc-900 text-white shadow-lg scale-[1.02]'
                           : 'border-zinc-100 bg-white text-zinc-500'
                       }`}
                     >
-                      <p className="font-black text-sm">{s.name}</p>
-                      <p className="text-xs font-bold mt-0.5 opacity-60">₹{s.price}</p>
+                      <p className="font-black text-xs">{s.name}</p>
+                      <p className="text-[10px] font-bold mt-0.5 opacity-60">₹{s.price} · {s.duration}m</p>
                     </button>
                   ))}
                 </div>
@@ -528,13 +624,13 @@ export default function Staff() {
             </div>
 
             {/* CTA */}
-            <div className="px-6 pb-6 pt-2">
+            <div className="px-6 pb-6 pt-2 flex-shrink-0">
               <button
                 onClick={addWalkIn}
                 disabled={nextSlot === null}
-                className="w-full bg-indigo-600 text-white py-5 rounded-3xl font-black text-lg shadow-2xl active:scale-[0.97] transition-all disabled:opacity-20 flex items-center justify-center gap-3 uppercase tracking-widest"
+                className="w-full bg-indigo-600 text-white py-4.5 rounded-2xl font-black text-base shadow-2xl active:scale-[0.97] transition-all disabled:opacity-20 flex items-center justify-center gap-2 uppercase tracking-widest"
               >
-                ADD TO QUEUE <ArrowRight size={18} />
+                ADD TO QUEUE <ArrowRight size={16} />
               </button>
             </div>
           </div>
