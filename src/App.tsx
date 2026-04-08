@@ -29,6 +29,7 @@ const Profile = lazy(() => import("./pages/Profile"));
 const AtHome = lazy(() => import("./pages/AtHome"));
 const ArtistProfile = lazy(() => import("./pages/ArtistProfile"));
 const AtHomeBooking = lazy(() => import("./pages/AtHomeBooking"));
+const Staff = lazy(() => import("./pages/Staff"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 
 const queryClient = new QueryClient();
